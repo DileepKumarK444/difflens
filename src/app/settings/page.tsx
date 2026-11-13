@@ -2,6 +2,7 @@ import { getDb } from "@/lib/db";
 import { getSetting } from "@/lib/db/settings";
 import { dataDir, dbPath } from "@/lib/paths";
 import { PageHeader } from "@/components/layout/page-header";
+import { AccountsPanel } from "@/components/settings/accounts-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default function SettingsPage() {
       <p className="mt-4 text-sm text-muted-foreground">
         Editing providers, custom instructions and severity arrives in Phase 4.
       </p>
+      <AccountsPanel />
     </div>
   );
 }

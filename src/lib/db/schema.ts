@@ -98,3 +98,16 @@ export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 });
+
+/**
+ * GitHub accounts added with a pasted token. The token itself lives only in the macOS
+ * Keychain (service "DiffLens GitHub token", account = this id), never in this table.
+ * Accounts that come from `gh auth login` are listed live and are not stored here.
+ */
+export const accounts = sqliteTable("accounts", {
+  id: id(),
+  host: text("host").notNull(),
+  login: text("login").notNull(),
+  label: text("label").notNull(),
+  createdAt: createdAt(),
+});

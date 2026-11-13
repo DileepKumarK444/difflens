@@ -14,6 +14,8 @@ export const SETTING_SCHEMAS = {
   customInstructions: z.string().max(4000).default(""),
   minSeverity: z.enum(["Critical", "High", "Medium", "Low", "Informational"]).default("Low"),
   githubHost: z.string().min(1).default("github.com"),
+  /** Account id used for GitHub calls; empty means the active `gh` account. */
+  defaultAccount: z.string().max(200).default(""),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
