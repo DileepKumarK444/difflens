@@ -4,18 +4,26 @@ import { getDb } from "@/lib/db";
 import { errorResponse } from "@/lib/api-helpers";
 import { addRepo, listRepos } from "@/lib/git/repos-db";
 import { statusCounts, detectBase } from "@/lib/git/repo";
+import { parseRemoteUrl } from "@/lib/gh/parse";
+import { configuredHosts } from "@/lib/pr-api";
 
 export const dynamic = "force-dynamic";
 
+function githubOf(remote: string | null, hosts: Set<string>) {
+  const ref = parseRemoteUrl(remote);
+  return ref && hosts.has(ref.host) ? ref : null;
+}
+
 export async function GET() {
   const rows = listRepos(getDb());
+  const hosts = configuredHosts();
   const repos = await Promise.all(
     rows.map(async (r) => {
       try {
         const [status, base] = await Promise.all([statusCounts(r.path), detectBase(r.path)]);
-        return { ...r, createdAt: r.createdAt.getTime(), ok: true as const, status, base: base.base };
+        return { ...r, createdAt: r.createdAt.getTime(), ok: true as const, status, base: base.base, github: githubOf(r.remoteUrl, hosts) };
       } catch {
-        return { ...r, createdAt: r.createdAt.getTime(), ok: false as const, status: null, base: null };
+        return { ...r, createdAt: r.createdAt.getTime(), ok: false as const, status: null, base: null, github: githubOf(r.remoteUrl, hosts) };
       }
     }),
   );

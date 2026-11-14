@@ -3,6 +3,7 @@ import { getSetting } from "@/lib/db/settings";
 import { dataDir, dbPath } from "@/lib/paths";
 import { PageHeader } from "@/components/layout/page-header";
 import { AccountsPanel } from "@/components/settings/accounts-panel";
+import { GithubHostForm } from "@/components/settings/github-host-form";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,6 @@ export default function SettingsPage() {
   const rows: [string, string][] = [
     ["Active provider", getSetting(db, "provider")],
     ["Minimum severity", getSetting(db, "minSeverity")],
-    ["GitHub host", getSetting(db, "githubHost")],
     ["Data directory", dataDir()],
     ["Database file", dbPath()],
   ];
@@ -30,6 +30,7 @@ export default function SettingsPage() {
         Editing providers, custom instructions and severity arrives in Phase 4.
       </p>
       <AccountsPanel />
+      <GithubHostForm />
     </div>
   );
 }

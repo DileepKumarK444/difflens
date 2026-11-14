@@ -23,6 +23,13 @@ interface FileEntry {
 }
 interface DiffResponse {
   label: string;
+  title?: string;
+  author?: string | null;
+  isDraft?: boolean;
+  state?: string;
+  reviewDecision?: string | null;
+  url?: string;
+  branches?: { head: string; base: string };
   base: string | null;
   files: FileEntry[];
   skipped: { path: string; reason: string }[];
@@ -38,7 +45,39 @@ interface Sides {
 const STATUS_LETTER = { added: "A", modified: "M", deleted: "D", renamed: "R" } as const;
 const STATUS_COLOR = { added: "text-emerald-400", modified: "text-amber-300", deleted: "text-red-400", renamed: "text-sky-400" } as const;
 
-export function Workspace({ repoId, scopeJson }: { repoId: string; scopeJson: string }) {
+export type WorkspaceSource = { kind: "local"; repoId: string; scopeJson: string } | { kind: "pr"; prJson: string; host: string };
+
+function urlsFor(source: WorkspaceSource) {
+  if (source.kind === "local") {
+    const id = encodeURIComponent(source.repoId);
+    return {
+      key: `local|${source.repoId}|${source.scopeJson}`,
+      diff: `/api/repos/${id}/diff?scope=${encodeURIComponent(source.scopeJson)}`,
+      file: (path: string, oldPath: string | null) => {
+        const qs = new URLSearchParams({ scope: source.scopeJson, path });
+        if (oldPath) qs.set("oldPath", oldPath);
+        return `/api/repos/${id}/file?${qs}`;
+      },
+      info: `/api/repos/${id}/info`,
+      back: `/reviews/new?repo=${id}`,
+    };
+  }
+  return {
+    key: `pr|${source.prJson}`,
+    diff: `/api/pr/diff?pr=${encodeURIComponent(source.prJson)}`,
+    file: (path: string, oldPath: string | null) => {
+      const qs = new URLSearchParams({ pr: source.prJson, path });
+      if (oldPath) qs.set("oldPath", oldPath);
+      return `/api/pr/file?${qs}`;
+    },
+    info: null,
+    back: "/reviews/new",
+  };
+}
+
+export function Workspace({ source }: { source: WorkspaceSource }) {
+  const urls = useMemo(() => urlsFor(source), [source]);
+  const scopeJson = urls.key;
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [repoName, setRepoName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -50,17 +89,18 @@ export function Workspace({ repoId, scopeJson }: { repoId: string; scopeJson: st
 
   useEffect(() => {
     let alive = true;
-    const q = encodeURIComponent(scopeJson);
     Promise.all([
-      fetch(`/api/repos/${encodeURIComponent(repoId)}/diff?scope=${q}`).then(async (r) => {
+      fetch(urls.diff).then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error ?? "Couldn’t load the diff");
         return d as DiffResponse;
       }),
-      fetch(`/api/repos/${encodeURIComponent(repoId)}/info`)
-        .then((r) => r.json())
-        .then((d: { repo?: { name: string } }) => d.repo?.name ?? "")
-        .catch(() => ""),
+      urls.info
+        ? fetch(urls.info)
+            .then((r) => r.json())
+            .then((d: { repo?: { name: string } }) => d.repo?.name ?? "")
+            .catch(() => "")
+        : Promise.resolve(""),
     ])
       .then(([d, name]) => {
         if (!alive) return;
@@ -72,7 +112,7 @@ export function Workspace({ repoId, scopeJson }: { repoId: string; scopeJson: st
     return () => {
       alive = false;
     };
-  }, [repoId, scopeJson]);
+  }, [urls]);
 
   const file = diff?.files[selected] ?? null;
   const fileKey = file ? `${scopeJson}|${file.path}|${file.oldPath ?? ""}` : "";
@@ -80,9 +120,7 @@ export function Workspace({ repoId, scopeJson }: { repoId: string; scopeJson: st
   useEffect(() => {
     if (!file || file.binary) return;
     let alive = true;
-    const qs = new URLSearchParams({ scope: scopeJson, path: file.path });
-    if (file.oldPath) qs.set("oldPath", file.oldPath);
-    fetch(`/api/repos/${encodeURIComponent(repoId)}/file?${qs}`)
+    fetch(urls.file(file.path, file.oldPath))
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error ?? "Couldn’t load this file");
@@ -93,7 +131,7 @@ export function Workspace({ repoId, scopeJson }: { repoId: string; scopeJson: st
     return () => {
       alive = false;
     };
-  }, [repoId, scopeJson, file, fileKey]);
+  }, [urls, file, fileKey]);
 
   const move = useCallback(
     (delta: number) => {
@@ -136,7 +174,7 @@ export function Workspace({ repoId, scopeJson }: { repoId: string; scopeJson: st
         <p role="alert" className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {error}
         </p>
-        <Link href="/reviews/new" className="mt-3 inline-block text-sm text-muted-foreground underline">
+        <Link href={urls.back} className="mt-3 inline-block text-sm text-muted-foreground underline">
           Back to new review
         </Link>
       </div>
@@ -147,11 +185,27 @@ export function Workspace({ repoId, scopeJson }: { repoId: string; scopeJson: st
   return (
     <div className="-m-6 flex h-[calc(100vh-37px)] flex-col">
       <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2 text-sm">
-        <Link href="/reviews/new" aria-label="Back" className="text-muted-foreground hover:text-foreground">
+        <Link href={urls.back} aria-label="Back" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" aria-hidden />
         </Link>
-        <span className="font-medium">{repoName || "Repository"}</span>
-        <span className="text-muted-foreground">{diff.label}</span>
+        <span className="font-medium">{source.kind === "pr" ? diff.label : repoName || "Repository"}</span>
+        {source.kind === "pr" ? (
+          <>
+            <span className="max-w-[28rem] truncate text-muted-foreground" title={diff.title}>
+              {diff.title}
+            </span>
+            {diff.author ? <span className="text-muted-foreground">by {diff.author}</span> : null}
+            {diff.isDraft ? <Badge variant="secondary">draft</Badge> : null}
+            {diff.reviewDecision ? <Badge variant="outline">{diff.reviewDecision.replaceAll("_", " ").toLowerCase()}</Badge> : null}
+            {diff.url && diff.url.startsWith(`https://${source.host}/`) ? (
+              <a href={diff.url} target="_blank" rel="noreferrer noopener" className="text-xs text-muted-foreground underline">
+                Open on GitHub
+              </a>
+            ) : null}
+          </>
+        ) : (
+          <span className="text-muted-foreground">{diff.label}</span>
+        )}
         <Badge variant="outline">{diff.totals.files} files</Badge>
         <span className="text-emerald-400">+{diff.totals.additions}</span>
         <span className="text-red-400">−{diff.totals.deletions}</span>
