@@ -4,6 +4,7 @@ import { findings, reviewFiles, reviews } from "@/lib/db/schema";
 import type { EngineResult } from "@/lib/ai/engine";
 import { severityRank, type Severity } from "@/lib/ai/schema";
 import type { FileDiff } from "@/lib/git/diff-parse";
+import { z } from "zod";
 
 export interface NewReview {
   kind: "local" | "pr";
@@ -74,4 +75,22 @@ export function getReview(db: Db, id: string) {
 
 export function listReviews(db: Db, limit = 50) {
   return db.select().from(reviews).orderBy(desc(reviews.createdAt)).limit(limit).all();
+}
+
+export const TriagePatch = z
+  .object({
+    status: z.enum(["open", "resolved", "ignored"]).optional(),
+    note: z.string().max(4000).optional(),
+  })
+  .refine((v) => v.status !== undefined || v.note !== undefined, "Nothing to change");
+
+/** Update a finding's triage status and/or personal note. Returns the updated row, or null if it doesn't exist. */
+export function updateFinding(db: Db, id: string, patch: z.infer<typeof TriagePatch>) {
+  const p = TriagePatch.parse(patch);
+  const set: Partial<typeof findings.$inferInsert> = {};
+  if (p.status !== undefined) set.status = p.status;
+  if (p.note !== undefined) set.note = p.note;
+  const r = db.update(findings).set(set).where(eq(findings.id, id)).run();
+  if (r.changes === 0) return null;
+  return db.select().from(findings).where(eq(findings.id, id)).get() ?? null;
 }

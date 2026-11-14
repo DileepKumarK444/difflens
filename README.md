@@ -2,8 +2,8 @@
 
 Local-first AI code review for your own machine. Binds to `127.0.0.1:4317` only.
 
-Status: **Phase 4 of 7** (AI review engine, on top of local git and GitHub PRs).
-Full findings triage UI (5) and history/export/posting (6) arrive later; pages for them say so.
+Status: **Phase 5 of 7** (findings UI on top of the AI review engine).
+History, compare, export and posting (6) arrive later; pages for them say so.
 
 ## Run
 
@@ -56,3 +56,14 @@ Claude Code is run as `claude -p --output-format json` with only `Read,Grep,Glob
 Before anything is sent to Anthropic, DiffLens shows what will be sent and waits for you (Settings can change this to once per session or never).
 
 Use **Settings → Send test message** to check a provider end to end without sending any code.
+
+## Findings UI (Phase 5)
+
+- Findings appear in the right panel as cards, worst first, with severity, category, confidence, the explanation, why it matters, a suggested fix and an example. Everything from the model is shown as plain text.
+- Triage each finding as **Open**, **Resolved** or **Ignored**, and keep a personal note (saved automatically). Both persist in SQLite and feed the dashboard counts.
+- Filter by status, severity and category, and search titles, descriptions, files and your notes.
+- Click a finding's location (or press a key) to jump to the changed code: the file is selected, the line is revealed, and Monaco shows a severity-coloured marker in the gutter with a plain-text hover. Clicking a gutter marker selects its card.
+- The file list shows how many findings in each file are still open.
+- A review stays attached to the page through `?review=<id>`, so a reload brings the findings back.
+
+Keys: `j` / `k` move between files, `]` / `[` move to the next / previous finding in the current filter, `r` resolve, `i` ignore, `o` reopen the selected finding.

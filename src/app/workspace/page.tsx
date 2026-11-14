@@ -3,8 +3,8 @@ import { PrRefSchema } from "@/lib/gh/parse";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ repo?: string; scope?: string; pr?: string }> }) {
-  const { repo, scope, pr } = await searchParams;
+export default async function Page({ searchParams }: { searchParams: Promise<{ repo?: string; scope?: string; pr?: string; review?: string }> }) {
+  const { repo, scope, pr, review } = await searchParams;
   let source: WorkspaceSource | null = null;
   if (pr) {
     try {
@@ -17,5 +17,5 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ r
     source = { kind: "local", repoId: repo, scopeJson: scope };
   }
   if (!source) return <p className="text-sm text-muted-foreground">Choose something to review in New review first.</p>;
-  return <Workspace source={source} />;
+  return <Workspace source={source} initialReviewId={review && /^[0-9a-f-]{36}$/.test(review) ? review : undefined} />;
 }

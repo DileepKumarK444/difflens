@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import type { FindingView } from "@/lib/findings";
 
 export interface Summary {
   title: string;
@@ -22,23 +21,7 @@ export interface Summary {
   limitWarning: string | null;
 }
 
-export interface FindingRow {
-  id: string;
-  title: string;
-  category: string;
-  severity: "Critical" | "High" | "Medium" | "Low" | "Informational";
-  filePath: string;
-  lineStart: number;
-  lineEnd: number;
-  description: string;
-  whyItMatters: string;
-  suggestedFix: string;
-  codeExample: string | null;
-  confidence: number;
-  verification: "exact" | "downgraded";
-}
-
-interface ReviewData {
+export interface ReviewData {
   review: {
     id: string;
     status: "pending" | "running" | "complete" | "partial" | "failed";
@@ -56,11 +39,11 @@ interface ReviewData {
       filesReviewed: number;
     } | null;
   };
-  findings: FindingRow[];
+  findings: FindingView[];
   progress: { total: number; done: number; failed: number } | null;
 }
 
-type Phase =
+export type Phase =
   | { kind: "idle" }
   | { kind: "starting" }
   | { kind: "confirm"; summary: Summary }
@@ -68,8 +51,8 @@ type Phase =
   | { kind: "done"; data: ReviewData }
   | { kind: "error"; message: string };
 
-export function useReview(body: unknown) {
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+export function useReview(body: unknown, initialReviewId?: string) {
+  const [phase, setPhase] = useState<Phase>(initialReviewId ? { kind: "running", id: initialReviewId, progress: null } : { kind: "idle" });
 
   const start = useCallback(
     async (confirmSend: boolean) => {
@@ -110,7 +93,12 @@ export function useReview(body: unknown) {
     };
   }, [runningId]);
 
-  return { phase, start: () => start(false), confirm: () => start(true), cancelConfirm: () => setPhase({ kind: "idle" }), reset: () => setPhase({ kind: "idle" }) };
+  /** Apply a triage change locally after the server accepted it. */
+  const updateFinding = useCallback((id: string, patch: Partial<Pick<FindingView, "status" | "note">>) => {
+    setPhase((p) => (p.kind === "done" ? { kind: "done", data: { ...p.data, findings: p.data.findings.map((f) => (f.id === id ? { ...f, ...patch } : f)) } } : p));
+  }, []);
+
+  return { phase, updateFinding, start: () => start(false), confirm: () => start(true), cancelConfirm: () => setPhase({ kind: "idle" }), reset: () => setPhase({ kind: "idle" }) };
 }
 
 function kb(n: number): string {
@@ -161,111 +149,5 @@ export function ConfirmDialog({ summary, onSend, onCancel }: { summary: Summary;
         <Button onClick={onSend}>Send and review</Button>
       </div>
     </dialog>
-  );
-}
-
-const SEV: Record<FindingRow["severity"], string> = {
-  Critical: "border-red-500/60 text-red-300",
-  High: "border-orange-500/60 text-orange-300",
-  Medium: "border-amber-500/60 text-amber-300",
-  Low: "border-sky-500/60 text-sky-300",
-  Informational: "border-border text-muted-foreground",
-};
-
-export function FindingsList({ phase, onJump }: { phase: Phase; onJump: (file: string, line: number) => void }) {
-  if (phase.kind === "idle") return <p className="text-sm text-muted-foreground">No review has been run on this diff yet. Use Run review above.</p>;
-  if (phase.kind === "starting") return <p className="text-sm text-muted-foreground">Preparing the review…</p>;
-  if (phase.kind === "confirm") return <p className="text-sm text-muted-foreground">Waiting for your confirmation to send.</p>;
-  if (phase.kind === "running") {
-    const p = phase.progress;
-    return (
-      <div role="status" className="text-sm">
-        <p className="font-medium">Reviewing…</p>
-        <p className="mt-1 text-muted-foreground">{p && p.total > 0 ? `Part ${Math.min(p.done + 1, p.total)} of ${p.total}${p.failed ? `, ${p.failed} failed` : ""}` : "Working"}</p>
-        {p && p.total > 0 ? (
-          <div className="mt-2 h-1.5 overflow-hidden rounded bg-muted" aria-hidden>
-            <div className="h-full bg-primary transition-all" style={{ width: `${Math.round((p.done / p.total) * 100)}%` }} />
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-  if (phase.kind === "error") {
-    return (
-      <p role="alert" className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-        {phase.message}
-      </p>
-    );
-  }
-  const { review, findings } = phase.data;
-  const m = review.meta;
-  return (
-    <div className="grid gap-3 text-sm">
-      <p className="font-medium">
-        {findings.length} finding{findings.length === 1 ? "" : "s"}
-      </p>
-      {review.status === "partial" ? (
-        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-300">
-          Partial review. {review.partialReason}
-        </p>
-      ) : null}
-      {m && m.skipped.length > 0 ? (
-        <details className="text-xs text-muted-foreground">
-          <summary className="cursor-pointer">{m.skipped.length} file{m.skipped.length === 1 ? "" : "s"} not reviewed</summary>
-          <ul className="mt-1 space-y-0.5">
-            {m.skipped.map((s, i) => (
-              <li key={i} className="truncate" title={`${s.path}: ${s.reason}`}>
-                {s.path} <span className="opacity-70">({s.reason})</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-      {m && m.dropped.length > 0 ? (
-        <details className="text-xs text-muted-foreground">
-          <summary className="cursor-pointer">{m.dropped.length} unverifiable finding{m.dropped.length === 1 ? "" : "s"} dropped</summary>
-          <ul className="mt-1 space-y-0.5">
-            {m.dropped.map((d, i) => (
-              <li key={i}>
-                {d.title} <span className="opacity-70">({d.reason})</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-      {m && m.errors.length > 0 ? <p className="text-xs text-amber-300">{m.errors.join(" ")}</p> : null}
-      {findings.length === 0 ? <p className="text-muted-foreground">Nothing worth reporting was found in the parts that were reviewed.</p> : null}
-      <ul className="grid gap-2">
-        {findings.map((f) => (
-          <li key={f.id} className={cn("rounded-lg border bg-card p-3", SEV[f.severity])}>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-medium">{f.severity}</span>
-              <Badge variant="outline">{f.category}</Badge>
-              <span className="text-muted-foreground">{Math.round(f.confidence * 100)}% confident</span>
-              {f.verification === "downgraded" ? <Badge variant="secondary">adjusted</Badge> : null}
-            </div>
-            <p className="mt-1 font-medium text-foreground">{f.title}</p>
-            <button type="button" onClick={() => onJump(f.filePath, f.lineStart)} className="mt-0.5 block max-w-full truncate text-left font-mono text-xs text-muted-foreground underline-offset-2 hover:underline">
-              {f.filePath}:{f.lineStart}
-              {f.lineEnd !== f.lineStart ? `-${f.lineEnd}` : ""}
-            </button>
-            <p className="mt-2 whitespace-pre-wrap text-foreground">{f.description}</p>
-            {f.whyItMatters ? (
-              <p className="mt-2 whitespace-pre-wrap text-muted-foreground">
-                <span className="font-medium text-foreground">Why it matters: </span>
-                {f.whyItMatters}
-              </p>
-            ) : null}
-            {f.suggestedFix ? (
-              <p className="mt-2 whitespace-pre-wrap text-muted-foreground">
-                <span className="font-medium text-foreground">Suggested fix: </span>
-                {f.suggestedFix}
-              </p>
-            ) : null}
-            {f.codeExample ? <pre className="mt-2 overflow-auto rounded bg-muted p-2 font-mono text-xs text-foreground">{f.codeExample}</pre> : null}
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

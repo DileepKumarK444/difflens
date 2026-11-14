@@ -128,3 +128,13 @@
     @apply font-sans;
   }
 }
+/* Finding markers inside the Monaco diff editor */
+.dl-line { background: rgba(251, 191, 36, 0.08); }
+.dl-line-active { background: rgba(96, 165, 250, 0.22) !important; }
+.dl-glyph { margin-left: 3px; width: 8px !important; border-radius: 50%; height: 8px !important; margin-top: 5px; }
+.dl-glyph-critical { background: #ef4444; }
+.dl-glyph-high { background: #f97316; }
+.dl-glyph-medium { background: #fbbf24; }
+.dl-glyph-low { background: #38bdf8; }
+.dl-glyph-informational { background: #9ca3af; }
+.dl-glyph-active { outline: 2px solid #60a5fa; outline-offset: 1px; }

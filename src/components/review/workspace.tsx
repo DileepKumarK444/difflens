@@ -7,7 +7,11 @@ import { ArrowLeft, Columns2, Rows2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ConfirmDialog, FindingsList, useReview } from "./review-panel";
+import { apiFetch } from "@/lib/api-client";
+import { openCountsByFile, stepFinding, type FindingView, type Status } from "@/lib/findings";
+import type { FocusRequest, LineMarker } from "./diff-viewer";
+import { FindingsPanel, useFindingFilters } from "./findings-panel";
+import { ConfirmDialog, useReview } from "./review-panel";
 
 const DiffViewer = dynamic(() => import("./diff-viewer"), {
   ssr: false,
@@ -76,14 +80,30 @@ function urlsFor(source: WorkspaceSource) {
   };
 }
 
-export function Workspace({ source }: { source: WorkspaceSource }) {
+export function Workspace({ source, initialReviewId }: { source: WorkspaceSource; initialReviewId?: string }) {
   const urls = useMemo(() => urlsFor(source), [source]);
   const scopeJson = urls.key;
   const reviewBody = useMemo(
     () => (source.kind === "local" ? { type: "local", repoId: source.repoId, scope: JSON.parse(source.scopeJson) } : { type: "pr", pr: JSON.parse(source.prJson) }),
     [source],
   );
-  const rv = useReview(reviewBody);
+  const rv = useReview(reviewBody, initialReviewId);
+  const findings = useMemo<FindingView[]>(() => (rv.phase.kind === "done" ? rv.phase.data.findings : []), [rv.phase]);
+  const { filters, setFilters, visible } = useFindingFilters(findings);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [focus, setFocus] = useState<FocusRequest | null>(null);
+  const nonce = useRef(0);
+  const reviewId = rv.phase.kind === "running" ? rv.phase.id : rv.phase.kind === "done" ? rv.phase.data.review.id : null;
+
+  // Keep the review id in the address bar so a reload brings the findings back.
+  useEffect(() => {
+    if (!reviewId) return;
+    const u = new URL(window.location.href);
+    if (u.searchParams.get("review") !== reviewId) {
+      u.searchParams.set("review", reviewId);
+      window.history.replaceState(null, "", u);
+    }
+  }, [reviewId]);
   const [showFindings, setShowFindings] = useState(false);
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [repoName, setRepoName] = useState("");
@@ -148,12 +168,28 @@ export function Workspace({ source }: { source: WorkspaceSource }) {
     [diff],
   );
 
-  const jump = useCallback(
-    (path: string) => {
-      const i = diff?.files.findIndex((f) => f.path === path) ?? -1;
-      if (i >= 0) setSelected(i);
+  const jumpTo = useCallback(
+    (f: FindingView) => {
+      const i = diff?.files.findIndex((x) => x.path === f.filePath) ?? -1;
+      if (i < 0) return;
+      setSelected(i);
+      setActiveId(f.id);
+      setShowFindings(true);
+      setFocus({ nonce: ++nonce.current, line: f.lineStart, side: diff!.files[i].status === "deleted" ? "original" : "modified" });
     },
     [diff],
+  );
+
+  const setStatus = useCallback(
+    async (id: string, status: Status) => {
+      try {
+        const r = await apiFetch(`/api/findings/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ status }) });
+        if (r.ok) rv.updateFinding(id, { status });
+      } catch {
+        /* the card shows its own error when you use its buttons */
+      }
+    },
+    [rv],
   );
 
   useEffect(() => {
@@ -163,15 +199,43 @@ export function Workspace({ source }: { source: WorkspaceSource }) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "j") move(1);
       else if (e.key === "k") move(-1);
+      else if (e.key === "]" || e.key === "[") {
+        const next = stepFinding(visible, activeId, e.key === "]" ? 1 : -1);
+        if (next) {
+          e.preventDefault();
+          jumpTo(next);
+        }
+      } else if ((e.key === "r" || e.key === "i" || e.key === "o") && activeId) {
+        e.preventDefault();
+        void setStatus(activeId, e.key === "r" ? "resolved" : e.key === "i" ? "ignored" : "open");
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [move]);
+  }, [move, visible, activeId, jumpTo, setStatus]);
 
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>("[aria-current='true']")?.scrollIntoView({ block: "nearest" });
   }, [selected, diff]);
 
+  const markers = useMemo<LineMarker[]>(
+    () =>
+      file
+        ? findings
+            .filter((f) => f.filePath === file.path && f.status === "open")
+            .map((f) => ({ id: f.id, title: f.title, severity: f.severity, lineStart: f.lineStart, lineEnd: f.lineEnd, side: file.status === "deleted" ? "original" : "modified" }))
+        : [],
+    [findings, file],
+  );
+  const fileBadges = useMemo(() => openCountsByFile(findings), [findings]);
+  const onFocused = useCallback((n: number) => setFocus((f) => (f && f.nonce === n ? null : f)), []);
+  const onMarkerClick = useCallback(
+    (id: string) => {
+      setActiveId(id);
+      setShowFindings(true);
+    },
+    [],
+  );
   const current = sides && sides.key === fileKey ? sides.data : null;
   const currentError = sideError && sideError.key === fileKey ? sideError.msg : null;
   const note = useMemo(() => {
@@ -269,6 +333,17 @@ export function Workspace({ source }: { source: WorkspaceSource }) {
                     <span className="min-w-0 flex-1 truncate" title={f.path}>
                       {f.path}
                     </span>
+                    {fileBadges.get(f.path) ? (
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-1.5 text-[11px] font-medium",
+                          fileBadges.get(f.path)!.worst === "Critical" || fileBadges.get(f.path)!.worst === "High" ? "bg-red-500/25 text-red-200" : fileBadges.get(f.path)!.worst === "Medium" ? "bg-amber-500/25 text-amber-200" : "bg-sky-500/25 text-sky-200",
+                        )}
+                        title={`${fileBadges.get(f.path)!.open} open finding${fileBadges.get(f.path)!.open === 1 ? "" : "s"}`}
+                      >
+                        {fileBadges.get(f.path)!.open}
+                      </span>
+                    ) : null}
                     <span className="shrink-0 font-mono text-[11px]">
                       <span className="text-emerald-400">+{f.additions}</span> <span className="text-red-400">−{f.deletions}</span>
                     </span>
@@ -301,7 +376,7 @@ export function Workspace({ source }: { source: WorkspaceSource }) {
               {note ? (
                 <p className="p-4 text-sm text-muted-foreground">{note}</p>
               ) : current && file ? (
-                <DiffViewer path={file.path} original={current.original ?? ""} modified={current.modified ?? ""} sideBySide={sideBySide} />
+                <DiffViewer path={file.path} original={current.original ?? ""} modified={current.modified ?? ""} sideBySide={sideBySide} markers={markers} activeId={activeId} focus={focus} onFocused={onFocused} onMarkerClick={onMarkerClick} />
               ) : (
                 <p className="p-4 text-sm text-muted-foreground">Loading file…</p>
               )}
@@ -315,8 +390,17 @@ export function Workspace({ source }: { source: WorkspaceSource }) {
               showFindings ? "absolute inset-y-0 right-0 z-10 w-[min(26rem,100%)] xl:static xl:w-auto" : "hidden xl:block",
             )}
           >
-            <h2 className="mb-3 text-sm font-medium">Findings</h2>
-            <FindingsList phase={rv.phase} onJump={jump} />
+            <h2 className="mb-3 text-sm font-medium">Findings{findings.length ? ` (${findings.length})` : ""}</h2>
+            <FindingsPanel
+              phase={rv.phase}
+              activeId={activeId}
+              onSelect={(f) => setActiveId(f.id)}
+              onJump={jumpTo}
+              onUpdate={rv.updateFinding}
+              filters={filters}
+              setFilters={setFilters}
+              visible={visible}
+            />
           </aside>
         </div>
       )}
