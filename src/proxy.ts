@@ -4,6 +4,7 @@ import {
   CSRF_HEADER,
   isAllowedHost,
   isAllowedOrigin,
+  cspHeader,
   isValidCsrf,
   newCsrfToken,
 } from "@/lib/security";
@@ -35,6 +36,7 @@ export function proxy(req: NextRequest) {
       secure: false, // plain http on loopback
     });
   }
+  res.headers.set("Content-Security-Policy", cspHeader(process.env.NODE_ENV !== "production"));
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "no-referrer");

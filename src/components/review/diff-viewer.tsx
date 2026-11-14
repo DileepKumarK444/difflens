@@ -168,6 +168,12 @@ export default function DiffViewer({
       language={languageFor(path)}
       original={original}
       modified={modified}
+      // One model per file, kept alive: letting the wrapper dispose models while the diff widget still
+      // points at them throws "TextModel got disposed before DiffEditorWidget model got reset".
+      originalModelPath={`difflens-original:/${path}`}
+      modifiedModelPath={`difflens-modified:/${path}`}
+      keepCurrentOriginalModel
+      keepCurrentModifiedModel
       onMount={onMount}
       loading={<p className="p-4 text-sm text-muted-foreground">Loading editor…</p>}
       options={{

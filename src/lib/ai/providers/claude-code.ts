@@ -1,7 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import { dataDir } from "@/lib/paths";
 import { redact, run as realRun, type RunOptions, type RunResult } from "@/lib/exec";
 import { ProviderError, type CompleteRequest, type ProviderStatus, type ReviewProvider } from "./types";
 
@@ -80,7 +80,9 @@ export function createClaudeCodeProvider(opts: { model?: string; run?: Runner; b
       let temp: string | null = null;
       if (!cwd) {
         // No repository to read: run in an empty folder so the tools have nothing to see.
-        temp = fs.mkdtempSync(path.join(os.tmpdir(), "difflens-claude-"));
+        const base = path.join(dataDir(), "tmp");
+        fs.mkdirSync(base, { recursive: true, mode: 0o700 });
+        temp = fs.mkdtempSync(path.join(base, "claude-"));
         cwd = temp;
       }
       try {

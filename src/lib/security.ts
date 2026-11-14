@@ -58,3 +58,24 @@ export function isValidCsrf(method: string, cookie: string | undefined, header: 
 export function newCsrfToken(): string {
   return crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
 }
+
+/**
+ * Content-Security-Policy for pages. Everything loads from this app only (Monaco is served locally),
+ * nothing can be framed, and forms and connections stay on this origin. The unsafe-eval allowance
+ * exists only in development, where React Fast Refresh needs it.
+ */
+export function cspHeader(dev: boolean): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""} blob:`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    `connect-src 'self'${dev ? " ws://127.0.0.1:* ws://localhost:*" : ""}`,
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}

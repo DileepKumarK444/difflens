@@ -15,8 +15,10 @@ import { ProviderError } from "@/lib/ai/providers/types";
 let dir: string;
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "difflens-prov-"));
+  process.env.DIFFLENS_DATA_DIR = path.join(dir, "data");
 });
 afterEach(() => {
+  delete process.env.DIFFLENS_DATA_DIR;
   fs.rmSync(dir, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
@@ -95,7 +97,8 @@ describe("Claude Code provider", () => {
     const f = fakeClaude(JSON.stringify({ is_error: false, result: "{}" }));
     await createClaudeCodeProvider({ bin: f.bin }).complete({ prompt: "x", timeoutMs: 20_000 });
     const cwd = f.read("cwd").trim();
-    expect(path.basename(cwd)).toMatch(/^difflens-claude-/);
+    expect(path.basename(cwd)).toMatch(/^claude-/);
+    expect(fs.realpathSync(path.dirname(cwd))).toBe(fs.realpathSync(path.join(dir, "data", "tmp"))); // inside the app data directory
     expect(fs.existsSync(cwd)).toBe(false);
   });
 

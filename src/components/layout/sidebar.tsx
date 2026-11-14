@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GitPullRequest, History, LayoutDashboard, FolderGit2, Settings, ScanSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ShortcutsHelp } from "./shortcuts-help";
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -40,7 +41,10 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <p className="mt-auto px-4 py-3 text-xs text-muted-foreground">127.0.0.1 only</p>
+      <div className="mt-auto">
+        <ShortcutsHelp />
+        <p className="px-4 py-3 text-xs text-muted-foreground">127.0.0.1 only</p>
+      </div>
     </aside>
   );
 }
