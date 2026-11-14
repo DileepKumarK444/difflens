@@ -42,6 +42,7 @@ export default function DiffViewer({
   original,
   modified,
   sideBySide,
+  collapse,
   markers,
   activeId,
   focus,
@@ -52,6 +53,8 @@ export default function DiffViewer({
   original: string;
   modified: string;
   sideBySide: boolean;
+  /** Fold the long runs of blank lines used to pad a saved diff. */
+  collapse: boolean;
   markers: LineMarker[];
   activeId: string | null;
   focus: FocusRequest | null;
@@ -178,6 +181,7 @@ export default function DiffViewer({
         renderOverviewRuler: true,
         diffAlgorithm: "advanced",
         glyphMargin: true,
+        hideUnchangedRegions: collapse ? { enabled: true, contextLineCount: 4, minimumLineCount: 3, revealLineCount: 20 } : { enabled: false },
       }}
     />
   );

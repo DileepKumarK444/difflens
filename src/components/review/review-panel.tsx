@@ -24,6 +24,7 @@ export interface Summary {
 export interface ReviewData {
   review: {
     id: string;
+    kind: "local" | "pr";
     status: "pending" | "running" | "complete" | "partial" | "failed";
     partialReason: string | null;
     errorMessage: string | null;
@@ -94,7 +95,7 @@ export function useReview(body: unknown, initialReviewId?: string) {
   }, [runningId]);
 
   /** Apply a triage change locally after the server accepted it. */
-  const updateFinding = useCallback((id: string, patch: Partial<Pick<FindingView, "status" | "note">>) => {
+  const updateFinding = useCallback((id: string, patch: Partial<Pick<FindingView, "status" | "note" | "postedAt">>) => {
     setPhase((p) => (p.kind === "done" ? { kind: "done", data: { ...p.data, findings: p.data.findings.map((f) => (f.id === id ? { ...f, ...patch } : f)) } } : p));
   }, []);
 

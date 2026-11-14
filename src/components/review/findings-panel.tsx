@@ -5,6 +5,9 @@ import { apiFetch } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { copyText } from "@/lib/clipboard";
+import { buildFixPrompt } from "@/lib/fix-prompt";
+import { buttonVariants } from "@/components/ui/button";
 import { STATUSES, countBy, defaultFilters, filterFindings, type FindingView, type Filters, type Severity, type Status } from "@/lib/findings";
 import { cn } from "@/lib/utils";
 import type { Phase } from "./review-panel";
@@ -35,6 +38,14 @@ export function FindingsPanel({
   filters,
   setFilters,
   visible,
+  reviewId,
+  reviewKind,
+  repoName,
+  postIds,
+  suggestIds,
+  onTogglePost,
+  onToggleSuggest,
+  onOpenPost,
 }: {
   phase: Phase;
   activeId: string | null;
@@ -44,7 +55,20 @@ export function FindingsPanel({
   filters: Filters;
   setFilters: (f: Filters) => void;
   visible: FindingView[];
+  reviewId: string | null;
+  reviewKind: "local" | "pr" | null;
+  repoName?: string;
+  postIds: Set<string>;
+  suggestIds: Set<string>;
+  onTogglePost: (id: string) => void;
+  onToggleSuggest: (id: string) => void;
+  onOpenPost: () => void;
 }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  async function copy(label: string, text: string) {
+    setCopied((await copyText(text)) ? label : "failed");
+    setTimeout(() => setCopied(null), 2000);
+  }
   if (phase.kind === "idle") return <p className="text-sm text-muted-foreground">No review has been run on this diff yet. Use Run review above.</p>;
   if (phase.kind === "starting") return <p className="text-sm text-muted-foreground">Preparing the review…</p>;
   if (phase.kind === "confirm") return <p className="text-sm text-muted-foreground">Waiting for your confirmation to send.</p>;
@@ -172,6 +196,30 @@ export function FindingsPanel({
               </button>
             ) : null}
           </div>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={visible.filter((f) => f.status === "open").length === 0}
+              onClick={() => void copy("prompt", buildFixPrompt(visible.filter((f) => f.status === "open"), { repoName }))}
+              title="Copies a prompt describing these open findings, to paste into Claude Code or your editor. DiffLens never edits your files."
+            >
+              Copy fix prompt ({visible.filter((f) => f.status === "open").length})
+            </Button>
+            {reviewId ? (
+              <a href={`/api/reviews/${encodeURIComponent(reviewId)}/export`} download className={buttonVariants({ variant: "outline", size: "xs" })}>
+                Export Markdown
+              </a>
+            ) : null}
+            {reviewKind === "pr" ? (
+              <Button size="xs" disabled={postIds.size === 0} onClick={onOpenPost}>
+                Post {postIds.size || ""} to GitHub…
+              </Button>
+            ) : null}
+            <span className="text-xs text-muted-foreground" aria-live="polite">
+              {copied === "prompt" ? "Copied to clipboard" : copied === "failed" ? "Couldn’t copy" : ""}
+            </span>
+          </div>
         </div>
       ) : null}
 
@@ -187,14 +235,38 @@ export function FindingsPanel({
 
       <ul className="grid gap-2">
         {visible.map((f) => (
-          <FindingCard key={f.id} f={f} active={f.id === activeId} onSelect={() => onSelect(f)} onJump={() => onJump(f)} onUpdate={onUpdate} />
+          <FindingCard
+            key={f.id}
+            f={f}
+            active={f.id === activeId}
+            onSelect={() => onSelect(f)}
+            onJump={() => onJump(f)}
+            onUpdate={onUpdate}
+            kind={reviewKind}
+            repoName={repoName}
+            postChecked={postIds.has(f.id)}
+            suggestChecked={suggestIds.has(f.id)}
+            onTogglePost={() => onTogglePost(f.id)}
+            onToggleSuggest={() => onToggleSuggest(f.id)}
+          />
         ))}
       </ul>
     </div>
   );
 }
 
-function FindingCard({ f, active, onSelect, onJump, onUpdate }: { f: FindingView; active: boolean; onSelect: () => void; onJump: () => void; onUpdate: (id: string, p: Partial<Pick<FindingView, "status" | "note">>) => void }) {
+function FindingCard({
+  f, active, onSelect, onJump, onUpdate, kind, repoName, postChecked, suggestChecked, onTogglePost, onToggleSuggest,
+}: {
+  f: FindingView; active: boolean; onSelect: () => void; onJump: () => void;
+  onUpdate: (id: string, p: Partial<Pick<FindingView, "status" | "note">>) => void;
+  kind: "local" | "pr" | null; repoName?: string; postChecked: boolean; suggestChecked: boolean; onTogglePost: () => void; onToggleSuggest: () => void;
+}) {
+  const [copied, setCopied] = useState<string | null>(null);
+  async function copy(label: string, text: string) {
+    setCopied((await copyText(text)) ? label : null);
+    setTimeout(() => setCopied(null), 1800);
+  }
   const [note, setNote] = useState(f.note);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [err, setErr] = useState<string | null>(null);
@@ -245,6 +317,7 @@ function FindingCard({ f, active, onSelect, onJump, onUpdate }: { f: FindingView
           </Badge>
         ) : null}
         {f.status !== "open" ? <Badge variant="secondary">{STATUS_LABEL[f.status]}</Badge> : null}
+        {f.postedAt ? <Badge variant="secondary" title={`Posted to GitHub ${new Date(f.postedAt).toLocaleString()}`}>posted</Badge> : null}
       </div>
       <p className="mt-1 font-medium text-foreground">{f.title}</p>
       <button
@@ -275,7 +348,14 @@ function FindingCard({ f, active, onSelect, onJump, onUpdate }: { f: FindingView
             {f.suggestedFix}
           </p>
         ) : null}
-        {f.codeExample ? <pre className="mt-2 overflow-auto rounded bg-muted p-2 font-mono text-xs text-foreground">{f.codeExample}</pre> : null}
+        {f.codeExample ? (
+          <div className="mt-2">
+            <pre className="overflow-auto rounded bg-muted p-2 font-mono text-xs text-foreground">{f.codeExample}</pre>
+            <Button size="xs" variant="ghost" className="mt-1" onClick={() => void copy("code", f.codeExample ?? "")}>
+              {copied === "code" ? "Copied" : "Copy example"}
+            </Button>
+          </div>
+        ) : null}
       </details>
 
       <div className="mt-3 flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -290,6 +370,23 @@ function FindingCard({ f, active, onSelect, onJump, onUpdate }: { f: FindingView
             {STATUS_LABEL[s]}
           </Button>
         ))}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1" onClick={(e) => e.stopPropagation()}>
+        <Button size="xs" variant="ghost" onClick={() => void copy("prompt", buildFixPrompt([f], { repoName }))} title="Copy a prompt to paste into Claude Code or your editor">
+          {copied === "prompt" ? "Copied" : "Copy fix prompt"}
+        </Button>
+        {kind === "pr" ? (
+          <>
+            <label className="flex items-center gap-1.5 text-xs text-foreground">
+              <input type="checkbox" checked={postChecked} onChange={onTogglePost} /> Post to GitHub
+            </label>
+            {postChecked && f.codeExample ? (
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Adds GitHub’s one-click Commit suggestion. The example replaces exactly the commented lines, so check it first.">
+                <input type="checkbox" checked={suggestChecked} onChange={onToggleSuggest} /> as a suggestion
+              </label>
+            ) : null}
+          </>
+        ) : null}
       </div>
       <div className="mt-2" onClick={(e) => e.stopPropagation()}>
         <label className="sr-only" htmlFor={`note-${f.id}`}>

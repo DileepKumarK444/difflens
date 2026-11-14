@@ -87,6 +87,8 @@ export const findings = sqliteTable(
     verification: text("verification", { enum: ["exact", "downgraded"] }).notNull().default("exact"),
     status: text("status", { enum: FINDING_STATUSES }).notNull().default("open"),
     note: text("note").notNull().default(""),
+    /** Set when this finding was posted to GitHub as a review comment. */
+    postedAt: integer("posted_at", { mode: "timestamp_ms" }),
     createdAt: createdAt(),
   },
   (t) => [

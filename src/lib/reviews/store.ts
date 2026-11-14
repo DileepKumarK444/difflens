@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db";
 import { findings, reviewFiles, reviews } from "@/lib/db/schema";
 import type { EngineResult } from "@/lib/ai/engine";
@@ -93,4 +93,33 @@ export function updateFinding(db: Db, id: string, patch: z.infer<typeof TriagePa
   const r = db.update(findings).set(set).where(eq(findings.id, id)).run();
   if (r.changes === 0) return null;
   return db.select().from(findings).where(eq(findings.id, id)).get() ?? null;
+}
+
+export function deleteReview(db: Db, id: string): boolean {
+  return db.delete(reviews).where(eq(reviews.id, id)).run().changes > 0;
+}
+
+/** One row per review with the counts the History page shows. */
+export function listReviewSummaries(db: Db, limit = 200) {
+  return db
+    .select({
+      id: reviews.id,
+      kind: reviews.kind,
+      title: reviews.title,
+      provider: reviews.provider,
+      model: reviews.model,
+      status: reviews.status,
+      prOwnerRepo: reviews.prOwnerRepo,
+      prNumber: reviews.prNumber,
+      createdAt: reviews.createdAt,
+      total: sql<number>`(select count(*) from findings f where f.review_id = "reviews"."id")`,
+      open: sql<number>`(select count(*) from findings f where f.review_id = "reviews"."id" and f.status = 'open')`,
+      critical: sql<number>`(select count(*) from findings f where f.review_id = "reviews"."id" and f.status = 'open' and f.severity = 'Critical')`,
+      high: sql<number>`(select count(*) from findings f where f.review_id = "reviews"."id" and f.status = 'open' and f.severity = 'High')`,
+      posted: sql<number>`(select count(*) from findings f where f.review_id = "reviews"."id" and f.posted_at is not null)`,
+    })
+    .from(reviews)
+    .orderBy(desc(reviews.createdAt))
+    .limit(limit)
+    .all();
 }

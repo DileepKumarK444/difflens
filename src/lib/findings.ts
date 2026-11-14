@@ -21,6 +21,8 @@ export interface FindingView {
   verification: "exact" | "downgraded";
   status: Status;
   note: string;
+  /** When this was posted to GitHub (ms), or null. */
+  postedAt?: number | null;
 }
 
 export interface Filters {

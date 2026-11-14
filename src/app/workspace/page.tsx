@@ -3,10 +3,13 @@ import { PrRefSchema } from "@/lib/gh/parse";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ repo?: string; scope?: string; pr?: string; review?: string }> }) {
-  const { repo, scope, pr, review } = await searchParams;
+export default async function Page({ searchParams }: { searchParams: Promise<{ repo?: string; scope?: string; pr?: string; review?: string; saved?: string }> }) {
+  const { repo, scope, pr, review, saved } = await searchParams;
   let source: WorkspaceSource | null = null;
-  if (pr) {
+  if (saved) {
+    if (!/^[0-9a-f-]{36}$/.test(saved)) return <p className="text-sm text-muted-foreground">That saved review link isn’t valid.</p>;
+    source = { kind: "saved", reviewId: saved };
+  } else if (pr) {
     try {
       const parsed = PrRefSchema.parse(JSON.parse(pr));
       source = { kind: "pr", prJson: pr, host: parsed.host };

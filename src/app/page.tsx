@@ -2,6 +2,7 @@ import { getDb } from "@/lib/db";
 import { dashboardStats } from "@/lib/db/queries";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +54,7 @@ export default function DashboardPage() {
         <ul className="divide-y divide-border rounded-lg border border-border">
           {s.recent.map((r) => (
             <li key={r.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-              <span className="min-w-0 flex-1 truncate">{r.title}</span>
+              <Link href={`/workspace?saved=${encodeURIComponent(r.id)}`} className="min-w-0 flex-1 truncate hover:underline">{r.title}</Link>
               <Badge variant="outline">{r.kind === "pr" ? "PR" : "Local"}</Badge>
               <span className="text-muted-foreground">{r.findingCount} findings</span>
               {r.openCritical > 0 ? <Badge variant="destructive">{r.openCritical} critical</Badge> : null}

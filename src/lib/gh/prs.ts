@@ -24,6 +24,8 @@ export function friendlyGhError(stderr: string, target: string): string {
   if (/(bad credentials|http 401|authentication|auth login|not logged in|gh_token)/.test(s)) {
     return "GitHub didn’t accept this account’s login. Run gh auth login or choose another account in Settings";
   }
+  if (/(http 403|forbidden|resource not accessible|must have (push|write))/.test(s)) return `This account isn’t allowed to comment on ${target}. A token needs pull request write access`;
+  if (/(http 422|unprocessable)/.test(s)) return "GitHub rejected the comment positions";
   if (/(could not resolve to a|http 404|not found|no pull requests)/.test(s)) {
     return `Couldn’t find ${target}, or this account has no access to it. Try a different account`;
   }
@@ -153,10 +155,10 @@ export function clearPrCache(): void {
   metaCache.clear();
 }
 
-export async function getPrMeta(db: Db, ref: PrRefInput, deps: Deps = defaultDeps()): Promise<PrMeta> {
+export async function getPrMeta(db: Db, ref: PrRefInput, deps: Deps = defaultDeps(), opts: { fresh?: boolean } = {}): Promise<PrMeta> {
   const key = `${ref.host}/${ref.owner}/${ref.repo}#${ref.number}|${ref.account ?? "default"}`;
   const hit = metaCache.get(key);
-  if (hit && Date.now() - hit.at < META_TTL_MS) return hit.meta;
+  if (!opts.fresh && hit && Date.now() - hit.at < META_TTL_MS) return hit.meta;
 
   const target = `${ref.owner}/${ref.repo}#${ref.number}`;
   const raw = await gh(
@@ -199,8 +201,8 @@ export async function getPrMeta(db: Db, ref: PrRefInput, deps: Deps = defaultDep
   return meta;
 }
 
-export async function getPrDiff(db: Db, ref: PrRefInput, deps: Deps = defaultDeps()): Promise<{ meta: PrMeta; patch: string }> {
-  const meta = await getPrMeta(db, ref, deps);
+export async function getPrDiff(db: Db, ref: PrRefInput, deps: Deps = defaultDeps(), opts: { fresh?: boolean } = {}): Promise<{ meta: PrMeta; patch: string }> {
+  const meta = await getPrMeta(db, ref, deps, opts);
   const patch = await gh(db, ["pr", "diff", String(ref.number), "-R", repoArg(ref), "--color", "never"], ref.account, `${ref.owner}/${ref.repo}#${ref.number}`, deps, 120_000);
   if (patch.length > MAX_DIFF_BYTES) throw new GhError("This diff is larger than 20 MB, which DiffLens won’t load");
   return { meta, patch };

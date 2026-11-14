@@ -6,6 +6,8 @@ export interface DiffLine {
   old?: number;
   /** 1-based line number on the new side (undefined for removed lines). */
   new?: number;
+  /** The line's text without the leading +, - or space. */
+  text: string;
 }
 
 export interface Hunk {
@@ -116,13 +118,13 @@ export function parseUnifiedDiff(text: string): FileDiff[] {
     if (!hunk) continue;
     const h: Hunk = hunk;
     if (line.startsWith("+")) {
-      h.lines.push({ t: "+", new: newNo++ });
+      h.lines.push({ t: "+", new: newNo++, text: line.slice(1) });
       c.additions++;
     } else if (line.startsWith("-")) {
-      h.lines.push({ t: "-", old: oldNo++ });
+      h.lines.push({ t: "-", old: oldNo++, text: line.slice(1) });
       c.deletions++;
     } else if (line.startsWith(" ")) {
-      h.lines.push({ t: " ", old: oldNo++, new: newNo++ });
+      h.lines.push({ t: " ", old: oldNo++, new: newNo++, text: line.slice(1) });
     }
     // "\ No newline at end of file" and blank trailing lines are ignored.
   }
@@ -132,4 +134,21 @@ export function parseUnifiedDiff(text: string): FileDiff[] {
     if (!f.path) f.path = f.oldPath ?? "(unknown)";
   }
   return files;
+}
+
+/**
+ * Rebuild the two sides of a file from its diff alone, for reviews opened from history.
+ * Lines the diff doesn't show are blank, and every shown line sits at its real line number,
+ * so findings (which cite real line numbers) still line up.
+ */
+export function reconstructFromHunks(f: FileDiff): { original: string; modified: string } {
+  const orig: string[] = [];
+  const mod: string[] = [];
+  for (const h of f.hunks)
+    for (const l of h.lines) {
+      if (l.old !== undefined) orig[l.old - 1] = l.text;
+      if (l.new !== undefined) mod[l.new - 1] = l.text;
+    }
+  const fill = (a: string[]) => Array.from({ length: a.length }, (_, i) => a[i] ?? "").join("\n");
+  return { original: fill(orig), modified: fill(mod) };
 }

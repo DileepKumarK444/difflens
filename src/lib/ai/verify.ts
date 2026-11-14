@@ -103,8 +103,8 @@ export function verifyFindings(raw: RawFinding[], files: FileDiff[]): { kept: Ve
   return { kept, dropped };
 }
 
-const tokens = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2));
-function jaccard(a: Set<string>, b: Set<string>): number {
+export const tokens = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2));
+export function jaccard(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
   let inter = 0;
   for (const x of a) if (b.has(x)) inter++;

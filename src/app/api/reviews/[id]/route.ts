@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { notFound } from "@/lib/api-helpers";
 import { getProgress, isRunning } from "@/lib/reviews/jobs";
-import { failReview, getReview } from "@/lib/reviews/store";
+import { deleteReview, failReview, getReview } from "@/lib/reviews/store";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   return NextResponse.json({
     review: { ...review, meta: review.meta ? JSON.parse(review.meta) : null, createdAt: review.createdAt.getTime(), completedAt: review.completedAt?.getTime() ?? null },
     files: r.files,
-    findings: r.findings.map((f) => ({ ...f, createdAt: f.createdAt.getTime() })),
+    findings: r.findings.map((f) => ({ ...f, createdAt: f.createdAt.getTime(), postedAt: f.postedAt?.getTime() ?? null })),
     progress: getProgress(id),
   });
+}
+
+/** Deleting a review also deletes its findings, notes and saved diff. Nothing else is touched. */
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  return deleteReview(getDb(), id) ? NextResponse.json({ ok: true }) : notFound("Review");
 }

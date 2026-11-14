@@ -2,8 +2,8 @@
 
 Local-first AI code review for your own machine. Binds to `127.0.0.1:4317` only.
 
-Status: **Phase 5 of 7** (findings UI on top of the AI review engine).
-History, compare, export and posting (6) arrive later; pages for them say so.
+Status: **Phase 6 of 7** (history, compare, export, copy-fix prompts and optional GitHub posting).
+Polish and the remaining test pass are Phase 7.
 
 ## Run
 
@@ -67,3 +67,14 @@ Use **Settings → Send test message** to check a provider end to end without se
 - A review stays attached to the page through `?review=<id>`, so a reload brings the findings back.
 
 Keys: `j` / `k` move between files, `]` / `[` move to the next / previous finding in the current filter, `r` resolve, `i` ignore, `o` reopen the selected finding.
+
+## History, export and posting (Phase 6)
+
+- **History** lists every saved review (search, filter by source and status). **Open** shows it exactly as it was reviewed, rebuilt from the saved diff, so it works even if the branch or PR has since changed. **Open the live diff** jumps back to the current code.
+- **Compare** two reviews: findings are matched by file and wording (line numbers drift), and shown as no longer reported, new, or still there.
+- **Export** a review as Markdown (all findings, statuses and your notes), or **delete** it (findings, notes and the saved diff go too).
+- **Fix your own issues**: *Copy fix prompt* (one finding, or all open ones in the current filter) builds a prompt for Claude Code or your editor. DiffLens never edits your files.
+- **Post to GitHub** (pull request reviews only, never local ones, never automatic): tick findings, optionally tick *as a suggestion* (GitHub's one-click Commit suggestion, only when you tick it), and click Post. A dialog first shows exactly what will be posted to which `owner/repo #N`, lets you edit every comment, and only then posts. It is always one review with event `COMMENT` (never approve or request changes), from the GitHub account chosen for that PR.
+  - Each comment is placed on its line when GitHub will accept it. If any comment can't be placed on the diff (or GitHub rejects the positions), everything is posted as one general comment and you are told.
+  - Refused: a closed PR, a PR with new commits since the review (re-run the review), a confirmation that names the wrong repo or number, and any local review.
+  - Findings you posted are marked *posted*.

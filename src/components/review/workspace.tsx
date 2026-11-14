@@ -11,6 +11,7 @@ import { apiFetch } from "@/lib/api-client";
 import { openCountsByFile, stepFinding, type FindingView, type Status } from "@/lib/findings";
 import type { FocusRequest, LineMarker } from "./diff-viewer";
 import { FindingsPanel, useFindingFilters } from "./findings-panel";
+import { PostDialog } from "./post-dialog";
 import { ConfirmDialog, useReview } from "./review-panel";
 
 const DiffViewer = dynamic(() => import("./diff-viewer"), {
@@ -35,6 +36,7 @@ interface DiffResponse {
   reviewDecision?: string | null;
   url?: string;
   branches?: { head: string; base: string };
+  saved?: { at: number; kind: "local" | "pr"; source: { type: string; repoId?: string; scope?: unknown; pr?: Record<string, unknown> } };
   base: string | null;
   files: FileEntry[];
   skipped: { path: string; reason: string }[];
@@ -50,9 +52,19 @@ interface Sides {
 const STATUS_LETTER = { added: "A", modified: "M", deleted: "D", renamed: "R" } as const;
 const STATUS_COLOR = { added: "text-emerald-400", modified: "text-amber-300", deleted: "text-red-400", renamed: "text-sky-400" } as const;
 
-export type WorkspaceSource = { kind: "local"; repoId: string; scopeJson: string } | { kind: "pr"; prJson: string; host: string };
+export type WorkspaceSource = { kind: "local"; repoId: string; scopeJson: string } | { kind: "pr"; prJson: string; host: string } | { kind: "saved"; reviewId: string };
 
 function urlsFor(source: WorkspaceSource) {
+  if (source.kind === "saved") {
+    const id = encodeURIComponent(source.reviewId);
+    return {
+      key: `saved|${source.reviewId}`,
+      diff: `/api/reviews/${id}/diff`,
+      file: (path: string) => `/api/reviews/${id}/file?${new URLSearchParams({ path })}`,
+      info: null,
+      back: "/history",
+    };
+  }
   if (source.kind === "local") {
     const id = encodeURIComponent(source.repoId);
     return {
@@ -80,14 +92,43 @@ function urlsFor(source: WorkspaceSource) {
   };
 }
 
+/** Link back to the live diff a saved review was made from, when it can be rebuilt. */
+function liveHref(saved: NonNullable<DiffResponse["saved"]>): string | null {
+  const src = saved.source;
+  if (src.type === "local" && src.repoId && src.scope) return `/workspace?repo=${encodeURIComponent(src.repoId)}&scope=${encodeURIComponent(JSON.stringify(src.scope))}`;
+  if (src.type === "pr" && src.pr) {
+    const { host, owner, repo, number, account } = src.pr as Record<string, unknown>;
+    return `/workspace?pr=${encodeURIComponent(JSON.stringify({ host, owner, repo, number, ...(account !== undefined ? { account } : {}) }))}`;
+  }
+  return null;
+}
+
 export function Workspace({ source, initialReviewId }: { source: WorkspaceSource; initialReviewId?: string }) {
   const urls = useMemo(() => urlsFor(source), [source]);
   const scopeJson = urls.key;
   const reviewBody = useMemo(
-    () => (source.kind === "local" ? { type: "local", repoId: source.repoId, scope: JSON.parse(source.scopeJson) } : { type: "pr", pr: JSON.parse(source.prJson) }),
+    () =>
+      source.kind === "local"
+        ? { type: "local", repoId: source.repoId, scope: JSON.parse(source.scopeJson) }
+        : source.kind === "pr"
+          ? { type: "pr", pr: JSON.parse(source.prJson) }
+          : null,
     [source],
   );
-  const rv = useReview(reviewBody, initialReviewId);
+  const rv = useReview(reviewBody, source.kind === "saved" ? source.reviewId : initialReviewId);
+  const [postIds, setPostIds] = useState<Set<string>>(new Set());
+  const [suggestIds, setSuggestIds] = useState<Set<string>>(new Set());
+  const [postOpen, setPostOpen] = useState(false);
+  const toggle = (set: Set<string>, id: string) => {
+    const n = new Set(set);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  };
+  const reviewKind = rv.phase.kind === "done" ? rv.phase.data.review.kind : null;
+  // Stable arrays: the post dialog fetches its preview when these change, and must not refetch (and lose edits) on every render.
+  const postList = useMemo(() => [...postIds], [postIds]);
+  const suggestList = useMemo(() => [...suggestIds].filter((i) => postIds.has(i)), [suggestIds, postIds]);
   const findings = useMemo<FindingView[]>(() => (rv.phase.kind === "done" ? rv.phase.data.findings : []), [rv.phase]);
   const { filters, setFilters, visible } = useFindingFilters(findings);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -97,13 +138,13 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
 
   // Keep the review id in the address bar so a reload brings the findings back.
   useEffect(() => {
-    if (!reviewId) return;
+    if (!reviewId || source.kind === "saved") return;
     const u = new URL(window.location.href);
     if (u.searchParams.get("review") !== reviewId) {
       u.searchParams.set("review", reviewId);
       window.history.replaceState(null, "", u);
     }
-  }, [reviewId]);
+  }, [reviewId, source.kind]);
   const [showFindings, setShowFindings] = useState(false);
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [repoName, setRepoName] = useState("");
@@ -267,7 +308,7 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
         <Link href={urls.back} aria-label="Back" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" aria-hidden />
         </Link>
-        <span className="font-medium">{source.kind === "pr" ? diff.label : repoName || "Repository"}</span>
+        <span className="font-medium">{source.kind === "local" ? repoName || "Repository" : source.kind === "saved" ? "Saved review" : diff.label}</span>
         {source.kind === "pr" ? (
           <>
             <span className="max-w-[28rem] truncate text-muted-foreground" title={diff.title}>
@@ -285,9 +326,22 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
         ) : (
           <span className="text-muted-foreground">{diff.label}</span>
         )}
+        {source.kind === "saved" && diff.saved ? (
+          <>
+            <Badge variant="secondary">saved {new Date(diff.saved.at).toLocaleDateString()}</Badge>
+            {liveHref(diff.saved) ? (
+              <Link href={liveHref(diff.saved)!} className="text-xs text-muted-foreground underline">
+                Open the live diff
+              </Link>
+            ) : null}
+          </>
+        ) : null}
         <Badge variant="outline">{diff.totals.files} files</Badge>
         <span className="text-emerald-400">+{diff.totals.additions}</span>
         <span className="text-red-400">−{diff.totals.deletions}</span>
+        {source.kind === "saved" ? (
+          <span className="ml-auto" />
+        ) : (
         <Button
           size="sm"
           className="ml-auto"
@@ -299,6 +353,7 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
         >
           {rv.phase.kind === "running" ? "Reviewing…" : rv.phase.kind === "done" ? "Run again" : "Run review"}
         </Button>
+        )}
         <Button size="sm" variant="ghost" className="xl:hidden" onClick={() => setShowFindings((v) => !v)} aria-pressed={showFindings}>
           Findings{rv.phase.kind === "done" ? ` (${rv.phase.data.findings.length})` : ""}
         </Button>
@@ -376,7 +431,7 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
               {note ? (
                 <p className="p-4 text-sm text-muted-foreground">{note}</p>
               ) : current && file ? (
-                <DiffViewer path={file.path} original={current.original ?? ""} modified={current.modified ?? ""} sideBySide={sideBySide} markers={markers} activeId={activeId} focus={focus} onFocused={onFocused} onMarkerClick={onMarkerClick} />
+                <DiffViewer path={file.path} original={current.original ?? ""} modified={current.modified ?? ""} sideBySide={sideBySide} collapse={source.kind === "saved"} markers={markers} activeId={activeId} focus={focus} onFocused={onFocused} onMarkerClick={onMarkerClick} />
               ) : (
                 <p className="p-4 text-sm text-muted-foreground">Loading file…</p>
               )}
@@ -400,10 +455,31 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
               filters={filters}
               setFilters={setFilters}
               visible={visible}
+              reviewId={reviewId}
+              reviewKind={reviewKind}
+              repoName={repoName || undefined}
+              postIds={postIds}
+              suggestIds={suggestIds}
+              onTogglePost={(id) => setPostIds((p) => toggle(p, id))}
+              onToggleSuggest={(id) => setSuggestIds((p) => toggle(p, id))}
+              onOpenPost={() => setPostOpen(true)}
             />
           </aside>
         </div>
       )}
+      {postOpen && reviewId ? (
+        <PostDialog
+          reviewId={reviewId}
+          ids={postList}
+          suggestionIds={suggestList}
+          onClose={() => setPostOpen(false)}
+          onPosted={(ids) => {
+            ids.forEach((i) => rv.updateFinding(i, { postedAt: Date.now() }));
+            setPostIds(new Set());
+            setSuggestIds(new Set());
+          }}
+        />
+      ) : null}
       {rv.phase.kind === "confirm" ? <ConfirmDialog summary={rv.phase.summary} onSend={rv.confirm} onCancel={rv.cancelConfirm} /> : null}
     </div>
   );

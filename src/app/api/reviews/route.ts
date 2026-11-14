@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { errorResponse } from "@/lib/api-helpers";
 import { StartBody, startReview } from "@/lib/reviews/service";
+import { listReviewSummaries } from "@/lib/reviews/store";
 
 export const dynamic = "force-dynamic";
 
@@ -19,4 +20,9 @@ export async function POST(req: Request) {
   } catch (e) {
     return errorResponse(e);
   }
+}
+
+export function GET() {
+  const rows = listReviewSummaries(getDb()).map((r) => ({ ...r, createdAt: r.createdAt.getTime() }));
+  return NextResponse.json({ reviews: rows });
 }

@@ -31,6 +31,8 @@ export interface Prepared {
   repoId: string | null;
   cwd: string | undefined;
   pr?: { host: string; ownerRepo: string; number: number };
+  /** The PR's head commit at review time, kept so comments are only posted if it hasn't moved. */
+  headOid?: string;
   context: string;
 }
 
@@ -78,6 +80,7 @@ export async function prepareSource(db: Db, source: StartBody["source"]): Promis
   return {
     kind: "pr", title: `${source.pr.owner}/${source.pr.repo} #${meta.number}: ${meta.title}`, patch, files: parseUnifiedDiff(patch), repoId, cwd,
     pr: { host: source.pr.host, ownerRepo: `${source.pr.owner}/${source.pr.repo}`, number: meta.number },
+    headOid: meta.headOid,
     context: cwd ? "Your local clone, which is at the PR’s head commit" : "Only the PR’s diff (no local clone is at the PR’s head commit)",
   };
 }
@@ -117,7 +120,7 @@ export async function startReview(db: Db, body: StartBody, opts: { provider?: Re
 
   const minSeverity = getSetting(db, "minSeverity");
   const id = createReview(db, {
-    kind: prepared.kind, source: body.source, title: prepared.title, repoId: prepared.repoId, pr: prepared.pr,
+    kind: prepared.kind, source: prepared.headOid ? { ...body.source, headOid: prepared.headOid } : body.source, title: prepared.title, repoId: prepared.repoId, pr: prepared.pr,
     provider: provider.id, model: provider.model, minSeverity, patch: prepared.patch, files: prepared.files,
   });
   setProgress(id, { total: summary.parts, done: 0, failed: 0 });

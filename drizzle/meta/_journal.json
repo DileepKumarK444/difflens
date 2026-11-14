@@ -22,6 +22,13 @@
       "when": 1794615832992,
       "tag": "0002_dashing_dracula",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794617351231,
+      "tag": "0003_lively_gunslinger",
+      "breakpoints": true
     }
   ]
 }
