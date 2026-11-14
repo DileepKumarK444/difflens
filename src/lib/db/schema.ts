@@ -39,6 +39,8 @@ export const reviews = sqliteTable(
     status: text("status", { enum: REVIEW_STATUSES }).notNull().default("pending"),
     partialReason: text("partial_reason"),
     errorMessage: text("error_message"),
+    /** JSON: chunk counts, skipped files, dropped findings, errors, finding stats. */
+    meta: text("meta"),
     /** Unified diff snapshot so history opens without git or GitHub. */
     diffSnapshot: text("diff_snapshot"),
     minSeverity: text("min_severity", { enum: SEVERITIES }),

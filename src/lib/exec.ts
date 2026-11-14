@@ -8,6 +8,8 @@ export interface RunResult {
 
 export interface RunOptions {
   env?: Record<string, string>;
+  /** When set, the child gets exactly this environment and nothing from process.env. */
+  replaceEnv?: Record<string, string>;
   cwd?: string;
   timeoutMs?: number;
   input?: string;
@@ -19,7 +21,7 @@ export interface RunOptions {
  */
 export function run(file: string, args: string[], opts: RunOptions = {}): Promise<RunResult> {
   return new Promise((resolve) => {
-    const env = { ...process.env, ...opts.env };
+    const env = (opts.replaceEnv ? { ...opts.replaceEnv } : { ...process.env, ...opts.env }) as NodeJS.ProcessEnv;
     if (opts.input !== undefined) {
       const child = spawn(file, args, { env, cwd: opts.cwd, stdio: ["pipe", "pipe", "pipe"] });
       let stdout = "";

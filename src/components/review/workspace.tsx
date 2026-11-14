@@ -7,6 +7,7 @@ import { ArrowLeft, Columns2, Rows2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog, FindingsList, useReview } from "./review-panel";
 
 const DiffViewer = dynamic(() => import("./diff-viewer"), {
   ssr: false,
@@ -78,6 +79,12 @@ function urlsFor(source: WorkspaceSource) {
 export function Workspace({ source }: { source: WorkspaceSource }) {
   const urls = useMemo(() => urlsFor(source), [source]);
   const scopeJson = urls.key;
+  const reviewBody = useMemo(
+    () => (source.kind === "local" ? { type: "local", repoId: source.repoId, scope: JSON.parse(source.scopeJson) } : { type: "pr", pr: JSON.parse(source.prJson) }),
+    [source],
+  );
+  const rv = useReview(reviewBody);
+  const [showFindings, setShowFindings] = useState(false);
   const [diff, setDiff] = useState<DiffResponse | null>(null);
   const [repoName, setRepoName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +144,14 @@ export function Workspace({ source }: { source: WorkspaceSource }) {
     (delta: number) => {
       if (!diff || diff.files.length === 0) return;
       setSelected((s) => Math.min(diff.files.length - 1, Math.max(0, s + delta)));
+    },
+    [diff],
+  );
+
+  const jump = useCallback(
+    (path: string) => {
+      const i = diff?.files.findIndex((f) => f.path === path) ?? -1;
+      if (i >= 0) setSelected(i);
     },
     [diff],
   );
@@ -209,7 +224,21 @@ export function Workspace({ source }: { source: WorkspaceSource }) {
         <Badge variant="outline">{diff.totals.files} files</Badge>
         <span className="text-emerald-400">+{diff.totals.additions}</span>
         <span className="text-red-400">−{diff.totals.deletions}</span>
-        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSideBySide((v) => !v)} aria-label={sideBySide ? "Switch to inline view" : "Switch to side-by-side view"}>
+        <Button
+          size="sm"
+          className="ml-auto"
+          disabled={rv.phase.kind === "starting" || rv.phase.kind === "running" || diff.files.length === 0}
+          onClick={() => {
+            setShowFindings(true);
+            rv.start();
+          }}
+        >
+          {rv.phase.kind === "running" ? "Reviewing…" : rv.phase.kind === "done" ? "Run again" : "Run review"}
+        </Button>
+        <Button size="sm" variant="ghost" className="xl:hidden" onClick={() => setShowFindings((v) => !v)} aria-pressed={showFindings}>
+          Findings{rv.phase.kind === "done" ? ` (${rv.phase.data.findings.length})` : ""}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setSideBySide((v) => !v)} aria-label={sideBySide ? "Switch to inline view" : "Switch to side-by-side view"}>
           {sideBySide ? <Rows2 className="size-4" aria-hidden /> : <Columns2 className="size-4" aria-hidden />}
           {sideBySide ? "Inline" : "Side by side"}
         </Button>
@@ -221,7 +250,7 @@ export function Workspace({ source }: { source: WorkspaceSource }) {
           <p className="mt-1 text-sm text-muted-foreground">There is nothing to review here. Try another scope.</p>
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_280px]">
+        <div className="relative grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_340px]">
           <nav aria-label="Changed files" className="flex min-h-0 flex-col border-r border-border">
             <p className="px-3 py-2 text-xs text-muted-foreground">CHANGED FILES · j / k to move</p>
             <ul ref={listRef} className="min-h-0 flex-1 overflow-auto">
@@ -279,12 +308,19 @@ export function Workspace({ source }: { source: WorkspaceSource }) {
             </div>
           </section>
 
-          <aside aria-label="Findings" className="hidden border-l border-border p-4 xl:block">
-            <h2 className="text-sm font-medium">Findings</h2>
-            <p className="mt-2 text-sm text-muted-foreground">No review has been run on this diff. Running AI reviews and showing findings here arrive in Phases 4 and 5.</p>
+          <aside
+            aria-label="Findings"
+            className={cn(
+              "min-h-0 overflow-auto border-l border-border bg-background p-4",
+              showFindings ? "absolute inset-y-0 right-0 z-10 w-[min(26rem,100%)] xl:static xl:w-auto" : "hidden xl:block",
+            )}
+          >
+            <h2 className="mb-3 text-sm font-medium">Findings</h2>
+            <FindingsList phase={rv.phase} onJump={jump} />
           </aside>
         </div>
       )}
+      {rv.phase.kind === "confirm" ? <ConfirmDialog summary={rv.phase.summary} onSend={rv.confirm} onCancel={rv.cancelConfirm} /> : null}
     </div>
   );
 }

@@ -2,8 +2,8 @@
 
 Local-first AI code review for your own machine. Binds to `127.0.0.1:4317` only.
 
-Status: **Phase 3 of 7** (GitHub PRs through `gh`, on top of local git).
-The AI engine (Phase 4), findings UI (5), history/export/posting (6) arrive later; pages for them say so.
+Status: **Phase 4 of 7** (AI review engine, on top of local git and GitHub PRs).
+Full findings triage UI (5) and history/export/posting (6) arrive later; pages for them say so.
 
 ## Run
 
@@ -38,3 +38,21 @@ Migrations in `drizzle/` run automatically at startup; regenerate with `npm run 
 - Pick which GitHub account to use per request (default account, whichever `gh` has active, or a specific one).
 - The PR diff comes from `gh pr diff`; the two sides of each file come from the contents API at the merge-base and head commits, so the viewer matches what GitHub shows.
 - Read-only: Phase 3 never posts anything to GitHub.
+
+## AI review engine (Phase 4)
+
+Pick a provider in Settings. Only the selected one is ever contacted, and the banner always says whether code leaves your machine.
+
+| Provider | Needs | Code goes to |
+|---|---|---|
+| Claude Code (default) | `claude` installed and logged in | Anthropic, through your own login (no API key) |
+| Ollama | Ollama running, a model pulled | This machine (or the server you name) |
+| Anthropic API | `ANTHROPIC_API_KEY` in the environment DiffLens runs in | Anthropic |
+
+How a review works: the diff is split into parts (at most 12 by default) and each part is sent as untrusted data inside a random boundary, with every line numbered. Replies must be JSON matching a Zod schema; an invalid reply gets exactly one repair attempt, then a clear error. Every finding is then checked against the diff you reviewed: invented files are dropped, lines outside the diff are moved to the nearest changed line and downgraded (or dropped if far away), duplicates are merged, and findings below your minimum severity are removed. Big diffs are marked **partial** and list what was skipped.
+
+Claude Code is run as `claude -p --output-format json` with only `Read,Grep,Glob`, `--permission-mode dontAsk`, no MCP servers, no session saved, the prompt on stdin, and a clean environment (your own login is used; any inherited `ANTHROPIC_*` or `CLAUDE_*` variables are dropped). It runs in the repository only when it is exactly the code under review.
+
+Before anything is sent to Anthropic, DiffLens shows what will be sent and waits for you (Settings can change this to once per session or never).
+
+Use **Settings → Send test message** to check a provider end to end without sending any code.

@@ -10,7 +10,13 @@ export type ProviderId = z.infer<typeof ProviderId>;
 export const SETTING_SCHEMAS = {
   provider: ProviderId.default("claude-code"),
   ollamaUrl: z.string().url().default("http://127.0.0.1:11434"),
-  ollamaModel: z.string().default(""),
+  ollamaModel: z.string().max(100).default(""),
+  /** Empty = let Claude Code use its own default model. */
+  claudeModel: z.string().max(100).default(""),
+  anthropicModel: z.string().max(100).default("claude-sonnet-5-5"),
+  /** When to ask before sending code to a service outside this machine. */
+  confirmSend: z.enum(["always", "session", "never"]).default("always"),
+  maxChunks: z.number().int().min(1).max(60).default(12),
   customInstructions: z.string().max(4000).default(""),
   minSeverity: z.enum(["Critical", "High", "Medium", "Low", "Informational"]).default("Low"),
   githubHost: z.string().min(1).default("github.com"),
