@@ -52,7 +52,10 @@ function friendly(text: string): string {
   if (/max.?turns/.test(t)) return "Claude Code used too many steps on this chunk";
   // Unknown failure: show a short, redacted first line so the real cause (e.g. an unsupported
   // flag in an older Claude Code, or a missing login) is visible instead of a bare message.
-  const detail = redact(text.trim().split("\n").find((l) => l.trim()) ?? "").replace(/\s+/g, " ").slice(0, 200);
+  const detail = redact(text.trim().split("\n").find((l) => l.trim()) ?? "")
+    .replace(/\b(sk-[A-Za-z0-9_-]{6,}|[A-Za-z0-9_-]{32,})\b/g, "[redacted]")
+    .replace(/\s+/g, " ")
+    .slice(0, 200);
   return detail ? `Claude Code returned an error: ${detail}` : "Claude Code returned an error";
 }
 
