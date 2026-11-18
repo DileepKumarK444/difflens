@@ -327,7 +327,7 @@ function FindingCard({
           onSelect();
           onJump();
         }}
-        className="mt-0.5 block max-w-full truncate text-left font-mono text-xs text-muted-foreground underline-offset-2 hover:underline"
+        className="mt-0.5 block max-w-full cursor-pointer truncate text-left font-mono text-xs text-muted-foreground underline-offset-2 hover:underline"
         title="Show in the diff"
       >
         {f.filePath}:{f.lineStart}
