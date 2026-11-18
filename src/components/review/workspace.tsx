@@ -303,7 +303,7 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
   if (!diff) return <p className="text-sm text-muted-foreground">Loading diff…</p>;
 
   return (
-    <div className="-m-6 flex h-[calc(100vh-37px)] min-w-0 flex-col overflow-hidden">
+    <div className="absolute inset-0 flex min-w-0 flex-col overflow-hidden">
       <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2 text-sm">
         <Link href={urls.back} aria-label="Back" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" aria-hidden />

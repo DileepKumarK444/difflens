@@ -24,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <ProviderBanner />
-          <main id="main" tabIndex={-1} className="min-h-0 flex-1 overflow-auto p-6 outline-none">{children}</main>
+          <main id="main" tabIndex={-1} className="relative min-h-0 flex-1 overflow-auto p-6 outline-none">{children}</main>
         </div>
       </body>
     </html>
