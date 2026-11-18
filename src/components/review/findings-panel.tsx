@@ -233,7 +233,7 @@ export function FindingsPanel({
         </div>
       ) : null}
 
-      <ul className="grid gap-2">
+      <ul className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
         {visible.map((f) => (
           <FindingCard
             key={f.id}
@@ -305,7 +305,7 @@ function FindingCard({
       ref={ref}
       data-finding-id={f.id}
       onClick={onSelect}
-      className={cn("rounded-lg border bg-card p-3", SEV_TEXT[f.severity], active && "ring-2 ring-primary", f.status !== "open" && "opacity-70")}
+      className={cn("min-w-0 break-words rounded-lg border bg-card p-3", SEV_TEXT[f.severity], active && "ring-2 ring-primary", f.status !== "open" && "opacity-70")}
     >
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="font-medium">{f.severity}</span>
