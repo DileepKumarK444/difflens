@@ -50,7 +50,10 @@ function friendly(text: string): string {
   if (/rate limit|usage limit|429|overloaded|quota/.test(t)) return "Claude Code hit a usage or rate limit. Try again later";
   if (/econnrefused|enotfound|network|firewall|proxy|etimedout/.test(t)) return "Claude Code couldn’t reach Anthropic. Check your connection";
   if (/max.?turns/.test(t)) return "Claude Code used too many steps on this chunk";
-  return "Claude Code returned an error";
+  // Unknown failure: show a short, redacted first line so the real cause (e.g. an unsupported
+  // flag in an older Claude Code, or a missing login) is visible instead of a bare message.
+  const detail = redact(text.trim().split("\n").find((l) => l.trim()) ?? "").replace(/\s+/g, " ").slice(0, 200);
+  return detail ? `Claude Code returned an error: ${detail}` : "Claude Code returned an error";
 }
 
 export function createClaudeCodeProvider(opts: { model?: string; run?: Runner; bin?: string } = {}): ReviewProvider {
