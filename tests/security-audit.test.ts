@@ -114,7 +114,7 @@ describe("source rules", () => {
   });
   it("only a few modules write to disk, and only inside the data directory or a validated repo path", () => {
     const writers = SRC.filter((f) => /\b(writeFile|writeFileSync|appendFile|mkdirSync|mkdtempSync|rmSync|unlinkSync|cpSync|renameSync)\b/.test(read(f))).map(rel).sort();
-    expect(writers).toEqual(["src/lib/ai/providers/claude-code.ts", "src/lib/paths.ts"]);
+    expect(writers).toEqual(["src/lib/ai/providers/claude-code.ts", "src/lib/keychain.ts", "src/lib/paths.ts"]);
   });
   it("the Claude Code temp folder lives under the app data directory", () => {
     const t = read(path.join(ROOT, "src/lib/ai/providers/claude-code.ts"));

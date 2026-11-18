@@ -231,3 +231,20 @@ describe("exec helper", () => {
     expect((await run("/definitely/missing", [])).code).not.toBe(0);
   });
 });
+
+describe("file keychain fallback (non-macOS)", () => {
+  it("stores, reads and removes tokens in an owner-only file", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const { createFileKeychain } = await import("@/lib/keychain");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dl-kc-"));
+    const kc = createFileKeychain(() => dir);
+    await kc.set("account-0001", "ghp_abcdefghijklmnopqrstu");
+    expect(await kc.get("account-0001")).toBe("ghp_abcdefghijklmnopqrstu");
+    expect(fs.statSync(path.join(dir, "tokens.json")).mode & 0o777).toBe(0o600);
+    await kc.remove("account-0001");
+    expect(await kc.get("account-0001")).toBeNull();
+    await expect(kc.set("account-0001", "bad token!")).rejects.toThrow();
+  });
+});

@@ -9,7 +9,9 @@ import fs from "node:fs";
 export function dataDir(): string {
   const dir =
     process.env.DIFFLENS_DATA_DIR ??
-    path.join(os.homedir(), "Library", "Application Support", "DiffLens");
+    (process.platform === "darwin"
+      ? path.join(os.homedir(), "Library", "Application Support", "DiffLens")
+      : path.join(process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local", "share"), "DiffLens"));
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
 }
