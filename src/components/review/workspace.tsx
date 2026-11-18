@@ -441,7 +441,7 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
           <aside
             aria-label="Findings"
             className={cn(
-              "min-h-0 min-w-0 overflow-y-auto overflow-x-hidden break-words border-l border-border bg-background p-4",
+              "min-h-0 min-w-0 overflow-y-auto overflow-x-hidden break-words border-l border-border bg-background py-4 pl-4 pr-6 [scrollbar-gutter:stable]",
               showFindings ? "absolute inset-y-0 right-0 z-10 w-[min(26rem,100%)] xl:static xl:w-auto" : "hidden xl:block",
             )}
           >
