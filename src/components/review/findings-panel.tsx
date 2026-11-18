@@ -102,7 +102,7 @@ export function FindingsPanel({
   const filtersOn = filters.search.trim() !== "" || filters.category !== "all" || filters.severities.size < SEVERITIES.length;
 
   return (
-    <div className="grid gap-3 text-sm">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 text-sm">
       {review.status === "partial" ? <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-300">Partial review. {review.partialReason}</p> : null}
       {m && m.skipped.length > 0 ? (
         <details className="text-xs text-muted-foreground">
@@ -135,7 +135,7 @@ export function FindingsPanel({
       {m && m.errors.length > 0 ? <p className="text-xs text-amber-300">{m.errors.join(" ")}</p> : null}
 
       {findings.length > 0 ? (
-        <div className="grid gap-2 rounded-lg border border-border p-2">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-border p-2">
           <div role="group" aria-label="Status" className="flex gap-1">
             {(["all", ...STATUSES] as const).map((s) => (
               <button

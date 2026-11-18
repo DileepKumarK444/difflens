@@ -303,7 +303,7 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
   if (!diff) return <p className="text-sm text-muted-foreground">Loading diff…</p>;
 
   return (
-    <div className="-m-6 flex h-[calc(100vh-37px)] flex-col">
+    <div className="-m-6 flex h-[calc(100vh-37px)] min-w-0 flex-col overflow-hidden">
       <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2 text-sm">
         <Link href={urls.back} aria-label="Back" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" aria-hidden />
@@ -369,7 +369,7 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
           <p className="mt-1 text-sm text-muted-foreground">There is nothing to review here. Try another scope.</p>
         </div>
       ) : (
-        <div className="relative grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_340px]">
+        <div className="relative grid min-h-0 flex-1 grid-cols-[minmax(160px,240px)_minmax(0,1fr)] xl:grid-cols-[minmax(180px,260px)_minmax(0,1fr)_minmax(280px,340px)]">
           <nav aria-label="Changed files" className="flex min-h-0 flex-col border-r border-border">
             <p className="px-3 py-2 text-xs text-muted-foreground">CHANGED FILES · j / k to move</p>
             <ul ref={listRef} className="min-h-0 flex-1 overflow-auto">
@@ -441,7 +441,7 @@ export function Workspace({ source, initialReviewId }: { source: WorkspaceSource
           <aside
             aria-label="Findings"
             className={cn(
-              "min-h-0 overflow-auto border-l border-border bg-background p-4",
+              "min-h-0 min-w-0 overflow-y-auto overflow-x-hidden break-words border-l border-border bg-background p-4",
               showFindings ? "absolute inset-y-0 right-0 z-10 w-[min(26rem,100%)] xl:static xl:w-auto" : "hidden xl:block",
             )}
           >
